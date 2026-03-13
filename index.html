@@ -80,6 +80,8 @@ input:focus{border-color:var(--gold);}
 .ctoggle .cn{font-family:'Bebas Neue',sans-serif;font-size:11px;letter-spacing:1px;color:var(--gold);}
 .ctoggle.on{opacity:1;border-color:var(--card-border);}
 .ctoggle.on::after{content:'✓';position:absolute;top:4px;right:5px;font-size:10px;color:var(--green);}
+.ctoggle.locked{cursor:default !important;}
+.ctoggle.locked:hover{opacity:inherit;}
 
 .scoring-rules{background:var(--surface2);border:1px solid rgba(245,200,66,.12);border-radius:10px;padding:14px 16px;margin-bottom:20px;}
 .scoring-rules-title{font-family:'Bebas Neue',sans-serif;font-size:13px;letter-spacing:3px;color:var(--muted);margin-bottom:10px;}
@@ -238,11 +240,13 @@ label.checkbox-row input{width:17px;height:17px;accent-color:var(--gold);}
       <p class="text-muted" style="font-family:'Barlow Condensed';font-size:15px;">Waiting for everyone to join...</p>
     </div>
     <div class="panel mb16">
-      <div class="panel-title">⚙️ Settings</div>
+      <div class="panel-title">⚙️ Settings <span id="settings-host-badge"></span></div>
       <div class="sec-label" style="margin-bottom:10px;">Cards in Pool</div>
       <div class="card-grid mb16" id="lobby-card-toggles"></div>
       <div class="sec-label" style="margin-bottom:10px;">Options</div>
-      <label class="checkbox-row"><input type="checkbox" id="opt-fool-hint" checked> Show the Fool their decoy role to act as</label>
+      <div id="fool-hint-row">
+        <label class="checkbox-row"><input type="checkbox" id="opt-fool-hint" checked> Show the Fool their decoy role to act as</label>
+      </div>
     </div>
     <div class="scoring-rules mb16">
       <div class="scoring-rules-title">📋 SCORING RULES</div>
@@ -325,7 +329,7 @@ label.checkbox-row input{width:17px;height:17px;accent-color:var(--gold);}
 
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
-import { getDatabase, ref, set, get, onValue, update }
+import { getDatabase, ref, set, get, onValue, update, remove, onDisconnect }
   from "https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js";
 
 // ══════════════════════════════════════════════════════════
@@ -387,17 +391,22 @@ function notify(msg, type='gold'){
 }
 
 // ── CARD TOGGLES ──────────────────────────────────────────────────────────────
-function renderCardToggles(containerId){
+function renderCardToggles(containerId, editable = true){
   const el = $(containerId);
   el.innerHTML = '';
   CARDS.forEach(c => {
     const d = document.createElement('div');
-    d.className = 'ctoggle' + (enabledCards.has(c.id) ? ' on' : '');
-    d.onclick = () => {
-      enabledCards.has(c.id) ? enabledCards.delete(c.id) : enabledCards.add(c.id);
-      d.classList.toggle('on');
-      if(roomId) syncSettings();
-    };
+    const isOn = enabledCards.has(c.id);
+    d.className = 'ctoggle' + (isOn ? ' on' : '') + (!editable ? ' locked' : '');
+    if(editable){
+      d.onclick = () => {
+        enabledCards.has(c.id) ? enabledCards.delete(c.id) : enabledCards.add(c.id);
+        d.classList.toggle('on');
+        if(roomId) syncSettings();
+      };
+    } else {
+      d.style.cursor = 'default';
+    }
     d.innerHTML = `<span class="ce">${c.emoji}</span><span class="cn">${c.name}</span>`;
     el.appendChild(d);
   });
@@ -421,6 +430,10 @@ window.createRoom = async function(){
     players:{ [myId]:{ id:myId, name:myName, color:COLORS[0] } },
     assignments:{}, decoys:{}, completed:{}, votes:{}, scores:{}, ready:{},
   });
+  // Auto-remove player when they disconnect
+  const presRef = ref(db, `rooms/${roomId}/players/${myId}`);
+  onDisconnect(presRef).remove();
+
   listenRoom();
   showLobby();
 };
@@ -440,6 +453,11 @@ window.joinRoom = async function(){
   await update(ref(db,`rooms/${roomId}/players`), {
     [myId]:{ id:myId, name:myName, color:COLORS[colorIdx] }
   });
+
+  // Auto-remove player when they disconnect
+  const presRef = ref(db, `rooms/${roomId}/players/${myId}`);
+  onDisconnect(presRef).remove();
+
   listenRoom();
 };
 
@@ -488,8 +506,29 @@ function showLobby(){
     `;
     list.appendChild(d);
   });
-  renderCardToggles('lobby-card-toggles');
-  if(gs.settings){ $('opt-fool-hint').checked = gs.settings.foolHint ?? true; }
+  renderCardToggles('lobby-card-toggles', isHost);
+
+  // Settings badge
+  $('settings-host-badge').innerHTML = isHost
+    ? '<span style="font-size:12px;font-family:\'Barlow Condensed\';color:#e07070;font-weight:600;letter-spacing:1px;">HOST ONLY</span>'
+    : '<span style="font-size:12px;font-family:\'Barlow Condensed\';color:var(--muted);letter-spacing:1px;">Set by host</span>';
+
+  // Fool hint row — editable for host, read-only label for guests
+  const foolHintRow = $('fool-hint-row');
+  if(isHost){
+    foolHintRow.innerHTML = `<label class="checkbox-row"><input type="checkbox" id="opt-fool-hint" ${(gs.settings?.foolHint ?? true) ? 'checked' : ''}> Show the Fool their decoy role to act as</label>`;
+    $('opt-fool-hint').addEventListener('change', () => { if(roomId) syncSettings(); });
+  } else {
+    const foolHintOn = gs.settings?.foolHint ?? true;
+    foolHintRow.innerHTML = `<div style="font-family:'Barlow Condensed';font-size:16px;color:var(--muted);padding:4px 0;">
+      ${foolHintOn ? '✅' : '❌'} Show the Fool their decoy role — <em>${foolHintOn ? 'enabled' : 'disabled'}</em> by host
+    </div>`;
+  }
+
+  if(gs.settings && isHost){
+    const el = $('opt-fool-hint');
+    if(el) el.checked = gs.settings.foolHint ?? true;
+  }
 
   // Host sees Start button; guests see a waiting message
   const hostCtrl  = $('lobby-host-controls');
@@ -1026,8 +1065,8 @@ window.nextRound = async function(){
 window.showScreen   = showScreen;
 window.syncSettings = syncSettings;
 
-renderCardToggles('lobby-card-toggles');
-$('opt-fool-hint').addEventListener('change', () => { if(roomId) syncSettings(); });
+// Initial render of card toggles before any room is joined (for the create-room flow)
+renderCardToggles('lobby-card-toggles', true);
 </script>
 </body>
 </html>
