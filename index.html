@@ -503,9 +503,9 @@ function listenRoom(){
         showLobby();
         break;
       case 'game':
-        // Full render (with deal animation) only when we have a new card to show.
-        // For all other in-round updates (ready clicks, checkbox, etc.) use updateGame.
-        if(currentScreenId !== 'game-screen' || myCard() !== renderedCardId){
+        // Only do a full render (with animation) if our card genuinely changed.
+        // Guard: if myCard() is undefined (transient), don't treat it as a new card.
+        if(currentScreenId !== 'game-screen' || (myCard() && myCard() !== renderedCardId)){
           renderGame();
         } else {
           updateGame();
@@ -608,11 +608,10 @@ async function assignAndPush(round){
     phase:'game', round, assignments, decoys, completed, votes:{}, ready,
     'settings/enabledCards': enabled,
   });
-  // Only reset renderedCardId if our own card actually changed
-  // (avoids re-triggering the animation for the host who called this function)
-  if(assignments[myId] !== renderedCardId){
-    renderedCardId = null;
-  }
+  // Null renderedCardId so everyone (including host) gets the deal animation for the new round.
+  // The listener guard (myCard() && myCard() !== renderedCardId) prevents
+  // spurious animation triggers from unrelated Firebase writes like checkbox clicks.
+  renderedCardId = null;
 }
 
 // ── CARD DEAL ANIMATION ───────────────────────────────────────────────────────
@@ -691,42 +690,40 @@ function renderGame(){
   if(!c){
     wrap.innerHTML = `<div class="role-card"><div class="waiting-card"><div class="spin">⚙️</div><h2>WAITING FOR CARD...</h2></div></div>`;
     renderedCardId = null;
-    cardRevealed   = false;
   } else if(myCardId !== renderedCardId) {
     renderedCardId = myCardId;
 
     wrap.innerHTML = `<div class="role-card"><div class="waiting-card"><div class="spin">🎴</div><h2>DEALING...</h2></div></div>`;
 
+    // Hide objective section while animation plays
+    const objNoteA  = $('obj-note');
+    const objLabelA = $('obj-section-label');
+    const otWrapA   = $('obj-toggle-wrap');
+    if(objNoteA)  objNoteA.style.display  = 'none';
+    if(objLabelA) objLabelA.style.display = 'none';
+    if(otWrapA)   otWrapA.innerHTML = '';
+
+    // Capture c in closure so it's available when animation finishes
+    const cardForAnim = c;
     runDealAnimation(myCardId, () => {
-      // Show the card directly — no click-to-reveal
       let foolHtml = '';
-      if(c.isFool && gs.settings?.foolHint && gs.decoys?.[myId]){
+      if(cardForAnim.isFool && gs.settings?.foolHint && gs.decoys?.[myId]){
         const dc = cardDef(gs.decoys[myId]);
         foolHtml = `<div class="fool-hint-box">🎭 <strong>Act like: ${dc?.emoji} ${dc?.name}</strong><br>"${dc?.obj}"<br>Make everyone think you have THIS card.</div>`;
       }
       wrap.innerHTML = `
-        <div class="role-card animate-in" style="border-color:${c.color};box-shadow:0 0 50px ${c.color}28;">
-          <div class="rc-name" style="color:${c.color}">${c.name}</div>
-          <span class="rc-emoji">${c.emoji}</span>
+        <div class="role-card animate-in" style="border-color:${cardForAnim.color};box-shadow:0 0 50px ${cardForAnim.color}28;">
+          <div class="rc-name" style="color:${cardForAnim.color}">${cardForAnim.name}</div>
+          <span class="rc-emoji">${cardForAnim.emoji}</span>
           <div class="rc-obj-label">OBJECTIVE</div>
-          <div class="rc-obj">${c.obj}</div>
-          <div class="rc-desc">${c.desc}</div>
+          <div class="rc-obj">${cardForAnim.obj}</div>
+          <div class="rc-desc">${cardForAnim.desc}</div>
           ${foolHtml}
         </div>`;
-      // Show objective section now that card is visible
-      showObjectiveSection(c);
+      showObjectiveSection(cardForAnim);
     });
-
-    // Hide objective section while animation is running
-    const objNote  = $('obj-note');
-    const objLabel = $('obj-section-label');
-    const otWrap   = $('obj-toggle-wrap');
-    if(objNote)  objNote.style.display  = 'none';
-    if(objLabel) objLabel.style.display = 'none';
-    otWrap.innerHTML = '';
-  }
-  // If card same as renderedCardId — animation already ran, card is visible, just update objective section
-  if(c && myCardId === renderedCardId){
+  } else {
+    // Card already rendered — just refresh the objective section (e.g. checkbox toggled)
     showObjectiveSection(c);
   }
 
