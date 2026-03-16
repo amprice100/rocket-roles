@@ -125,7 +125,19 @@ input:focus{border-color:var(--gold);}
 .obj-toggle .ot-text{font-family:'Barlow Condensed',sans-serif;font-size:19px;font-weight:700;}
 .obj-toggle .ot-sub{font-size:12px;color:var(--muted);margin-top:3px;font-family:'Barlow Condensed';}
 
-/* ── READY UP ── */
+/* ── CARD DEAL ANIMATION ── */
+.deal-overlay{position:fixed;inset:0;z-index:500;background:var(--bg);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:20px;}
+.deal-title{font-family:'Bebas Neue',sans-serif;font-size:28px;letter-spacing:4px;color:var(--gold);animation:fadeUp .3s ease;}
+.deal-slot{width:min(240px,80vw);height:320px;background:linear-gradient(160deg,#2a2210,#191408,#2a2210);border:3px solid var(--card-border);border-radius:18px;overflow:hidden;position:relative;box-shadow:0 0 60px rgba(200,149,42,.3);}
+.deal-slot-inner{display:flex;flex-direction:column;transition:transform 0.05s linear;}
+.deal-slot-card{height:320px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;flex-shrink:0;}
+.deal-slot-card .ds-emoji{font-size:64px;filter:drop-shadow(0 4px 14px rgba(0,0,0,.6));}
+.deal-slot-card .ds-name{font-family:'Bebas Neue',sans-serif;font-size:30px;letter-spacing:3px;}
+.deal-slot::before,.deal-slot::after{content:'';position:absolute;left:0;right:0;height:80px;z-index:2;pointer-events:none;}
+.deal-slot::before{top:0;background:linear-gradient(to bottom,var(--bg),transparent);}
+.deal-slot::after{bottom:0;background:linear-gradient(to top,var(--bg),transparent);}
+.deal-reveal{animation:dealReveal .5s cubic-bezier(.4,0,.2,1) forwards;}
+@keyframes dealReveal{from{transform:scale(.9) rotateY(30deg);opacity:0}to{transform:scale(1) rotateY(0);opacity:1}}
 .ready-section{margin-bottom:16px;}
 .ready-btn-wrap{margin-bottom:12px;}
 .ready-tracker{background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:14px 16px;}
@@ -267,8 +279,8 @@ label.checkbox-row input{width:17px;height:17px;accent-color:var(--gold);}
     <div class="role-card-wrap" id="role-card-wrap">
       <div class="role-card"><div class="waiting-card"><div class="spin">⚙️</div><h2>LOADING...</h2></div></div>
     </div>
-    <div class="sec-label">Did You Complete It?</div>
-    <div class="obj-note">
+    <div class="sec-label" id="obj-section-label">Did You Complete It?</div>
+    <div class="obj-note" id="obj-note">
       Tap below <strong>after your match</strong> to mark your objective done. Completing earns <strong>+4 pts</strong> — but every player who correctly guesses your card <strong>steals 1 pt from you</strong>. If you didn't complete it, correct guessers still get <strong>+1 free</strong> but can't steal from you. <strong style="color:#c8a0ff">Fool special: anyone guessing FOOL correctly wipes all 4 of your points.</strong>
     </div>
     <div id="obj-toggle-wrap"></div>
@@ -296,7 +308,7 @@ label.checkbox-row input{width:17px;height:17px;accent-color:var(--gold);}
   <div id="vote-screen" class="screen">
     <div class="panel-title" style="margin-bottom:6px;">📊 Guess Everyone's Role</div>
     <p style="font-family:'Barlow Condensed';font-size:16px;color:var(--muted);margin-bottom:16px;line-height:1.5;">
-      Correct guess = <strong style="color:var(--green)">+1 pt for you</strong>. If they completed their goal, you also <strong style="color:var(--green)">steal 1 pt from them</strong>. Guess someone is the <strong style="color:#c8a0ff">Fool</strong> and be right? They lose all 4 pts.
+      Correct guess = <strong style="color:var(--green)">+1 pt for you</strong> and <strong style="color:var(--green)">steals 1 pt</strong> from them if they completed their goal. Guess the <strong style="color:#c8a0ff">Fool</strong> correctly? They lose all 4 pts.
     </p>
 
     <!-- Ready-up for vote phase -->
@@ -327,6 +339,14 @@ label.checkbox-row input{width:17px;height:17px;accent-color:var(--gold);}
 
 </div>
 
+<!-- CARD DEAL ANIMATION OVERLAY -->
+<div id="deal-overlay" class="deal-overlay" style="display:none;">
+  <div class="deal-title">🎴 DEALING YOUR CARD...</div>
+  <div class="deal-slot">
+    <div class="deal-slot-inner" id="deal-slot-inner"></div>
+  </div>
+</div>
+
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
 import { getDatabase, ref, set, get, onValue, update, remove, onDisconnect }
@@ -336,13 +356,13 @@ import { getDatabase, ref, set, get, onValue, update, remove, onDisconnect }
 //  🔥 PASTE YOUR FIREBASE CONFIG BELOW
 // ══════════════════════════════════════════════════════════
 const firebaseConfig = {
-  apiKey: "AIzaSyDbLeQckNS4LDBdCSQ53Jx_6JY3RKL9llc",
-  authDomain: "rocket-league-game.firebaseapp.com",
-  databaseURL: "https://rocket-league-game-default-rtdb.firebaseio.com",
-  projectId: "rocket-league-game",
-  storageBucket: "rocket-league-game.firebasestorage.app",
-  messagingSenderId: "103132372015",
-  appId: "1:103132372015:web:887a3cc5b0f6eebe75fada"
+      apiKey: "AIzaSyDbLeQckNS4LDBdCSQ53Jx_6JY3RKL9llc",
+      authDomain: "rocket-league-game.firebaseapp.com",
+      databaseURL: "https://rocket-league-game-default-rtdb.firebaseio.com",
+      projectId: "rocket-league-game",
+      storageBucket: "rocket-league-game.firebasestorage.app",
+      messagingSenderId: "103132372015",
+      appId: "1:103132372015:web:887a3cc5b0f6eebe75fada"
 };
 // ══════════════════════════════════════════════════════════
 
@@ -369,7 +389,8 @@ let isHost       = false;
 let enabledCards = new Set(CARDS.map(c => c.id));
 let myVotes      = {};
 // Track the last card ID we rendered so we don't re-animate on unrelated updates
-let renderedCardId = null;
+let renderedCardId  = null;
+let currentScreenId = null;
 
 const $       = id => document.getElementById(id);
 const cardDef = id => CARDS.find(c => c.id === id);
@@ -378,6 +399,8 @@ const myCard  = ()  => gs?.assignments?.[myId];
 const amReady = ()  => gs?.ready?.[myId] === true;
 
 function showScreen(id){
+  if(currentScreenId === id) return; // already on this screen — don't scroll
+  currentScreenId = id;
   document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
   $(id).classList.add('active');
   window.scrollTo(0,0);
@@ -569,7 +592,56 @@ async function assignAndPush(round){
     'settings/enabledCards': enabled,
   });
   // Reset our local card tracker when new cards are assigned
-  renderedCardId = null;
+  renderedCardId  = null;
+  currentScreenId = null; // force screen re-show so game screen activates fresh
+}
+
+// ── CARD DEAL ANIMATION ───────────────────────────────────────────────────────
+function runDealAnimation(finalCardId, onDone){
+  const overlay   = $('deal-overlay');
+  const slotInner = $('deal-slot-inner');
+  overlay.style.display = 'flex';
+
+  // Build a list of cards to scroll through (random shuffles + final card at end)
+  const allCards = [...CARDS];
+  const sequence = [];
+  // ~18 random cards for the slot spin, then land on the real one
+  for(let i = 0; i < 18; i++){
+    sequence.push(allCards[Math.floor(Math.random()*allCards.length)]);
+  }
+  sequence.push(cardDef(finalCardId)); // last item is always the real card
+
+  // Render all frames into the slot
+  slotInner.innerHTML = '';
+  slotInner.style.transform = 'translateY(0)';
+  slotInner.style.transition = 'none';
+  sequence.forEach(c => {
+    const frame = document.createElement('div');
+    frame.className = 'deal-slot-card';
+    frame.innerHTML = `<span class="ds-emoji">${c.emoji}</span><span class="ds-name" style="color:${c.color}">${c.name}</span>`;
+    slotInner.appendChild(frame);
+  });
+
+  const frameH = 320;
+  let idx = 0;
+
+  // Fast spin, then slow down as it approaches the final card
+  function step(){
+    idx++;
+    if(idx >= sequence.length) {
+      // Landed — pause then dismiss
+      setTimeout(() => {
+        overlay.style.display = 'none';
+        onDone();
+      }, 900);
+      return;
+    }
+    slotInner.style.transition = `transform ${idx < 10 ? 60 : idx < 15 ? 120 : 250}ms ease`;
+    slotInner.style.transform  = `translateY(${-idx * frameH}px)`;
+    const delay = idx < 10 ? 70 : idx < 15 ? 130 : 260;
+    setTimeout(step, delay);
+  }
+  step();
 }
 
 window.rerollCards = async function(){
@@ -601,28 +673,40 @@ function renderGame(){
     wrap.innerHTML = `<div class="role-card"><div class="waiting-card"><div class="spin">⚙️</div><h2>WAITING FOR CARD...</h2></div></div>`;
     renderedCardId = null;
   } else if(myCardId !== renderedCardId) {
-    // Card changed (new round or first load) — animate
-    renderedCardId = myCardId;
-    let foolHtml = '';
-    if(c.isFool && gs.settings?.foolHint && gs.decoys?.[myId]){
-      const dc = cardDef(gs.decoys[myId]);
-      foolHtml = `<div class="fool-hint-box">🎭 <strong>Act like: ${dc?.emoji} ${dc?.name}</strong><br>"${dc?.obj}"<br>Make everyone think you have THIS card.</div>`;
-    }
-    wrap.innerHTML = `
-      <div class="role-card animate-in" style="border-color:${c.color};box-shadow:0 0 50px ${c.color}28;">
-        <div class="rc-name" style="color:${c.color}">${c.name}</div>
-        <span class="rc-emoji">${c.emoji}</span>
-        <div class="rc-obj-label">OBJECTIVE</div>
-        <div class="rc-obj">${c.obj}</div>
-        <div class="rc-desc">${c.desc}</div>
-        ${foolHtml}
-      </div>`;
+    // Card changed (new round or first load) — show deal animation first, then flip in
+    const newCardId = myCardId;
+    renderedCardId = newCardId; // set immediately to prevent re-triggering
+
+    // Show a placeholder while animating
+    wrap.innerHTML = `<div class="role-card"><div class="waiting-card"><div class="spin">🎴</div><h2>DEALING...</h2></div></div>`;
+
+    runDealAnimation(newCardId, () => {
+      // After animation completes, render the real card with flip
+      let foolHtml = '';
+      if(c.isFool && gs.settings?.foolHint && gs.decoys?.[myId]){
+        const dc = cardDef(gs.decoys[myId]);
+        foolHtml = `<div class="fool-hint-box">🎭 <strong>Act like: ${dc?.emoji} ${dc?.name}</strong><br>"${dc?.obj}"<br>Make everyone think you have THIS card.</div>`;
+      }
+      wrap.innerHTML = `
+        <div class="role-card animate-in" style="border-color:${c.color};box-shadow:0 0 50px ${c.color}28;">
+          <div class="rc-name" style="color:${c.color}">${c.name}</div>
+          <span class="rc-emoji">${c.emoji}</span>
+          <div class="rc-obj-label">OBJECTIVE</div>
+          <div class="rc-obj">${c.obj}</div>
+          <div class="rc-desc">${c.desc}</div>
+          ${foolHtml}
+        </div>`;
+    });
   }
   // If myCardId === renderedCardId, we skip re-rendering the card entirely (no flip)
 
-  // Objective toggle (only you can toggle yours)
-  const otWrap = $('obj-toggle-wrap');
-  if(c){
+  // Objective toggle — hidden for Fool (they don't know if they fooled everyone until after voting)
+  const otWrap   = $('obj-toggle-wrap');
+  const objNote  = $('obj-note');
+  const objLabel = $('obj-section-label');
+  if(c && !c.isFool){
+    if(objNote)  objNote.style.display  = '';
+    if(objLabel) objLabel.style.display = '';
     const done = gs.completed?.[myId] || false;
     otWrap.innerHTML = '';
     const ot = document.createElement('div');
@@ -638,7 +722,12 @@ function renderGame(){
       </div>`;
     otWrap.appendChild(ot);
   } else {
-    otWrap.innerHTML = '';
+    // Fool: hide the whole section
+    if(objNote)  objNote.style.display  = 'none';
+    if(objLabel) objLabel.style.display = 'none';
+    otWrap.innerHTML = c?.isFool
+      ? `<div class="obj-note" style="color:rgba(200,180,255,.8);border-left-color:rgba(155,89,245,.5);">🃏 <strong style="color:#c8a0ff">You're the Fool.</strong> You'll find out if you succeeded after everyone votes. Your objective is automatically tracked at results time.</div>`
+      : '';
   }
 
   // ── READY UP (non-host players) ──
@@ -783,18 +872,12 @@ function renderVote(){
   panels.innerHTML = '';
   targets.forEach(target => {
     const curVote = myVotes[target.id] || null;
-    const done    = gs.completed?.[target.id] || false;
     const sec     = document.createElement('div');
     sec.className = 'vote-target';
     sec.innerHTML = `
       <div class="vote-target-header">
         <span class="dot" style="background:${target.color}"></span>
         ${target.name}'s card?
-      </div>
-      <div class="vote-target-sub">
-        ${done
-          ? '✅ They completed their goal — correct guess <strong>steals 1 pt</strong> from them (+1 to you)'
-          : '❌ They didn\'t complete — correct guess gives you <strong>+1 free</strong> (no steal)'}
       </div>`;
     const grid = document.createElement('div');
     grid.className = 'vote-options';
@@ -925,6 +1008,8 @@ window.revealResults = async function(){
       gainFromGuessing: roundGainFromGuessing[p.id] || 0,
       foolCaught:       foolCaught[p.id]            || false,
     };
+    // Clamp to 0 — scores can never go negative
+    scores[p.id] = Math.max(0, scores[p.id]);
   });
 
   await update(ref(db,`rooms/${roomId}`),{
