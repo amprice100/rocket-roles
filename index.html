@@ -373,6 +373,7 @@ const firebaseConfig = {
       storageBucket: "rocket-league-game.firebasestorage.app",
       messagingSenderId: "103132372015",
       appId: "1:103132372015:web:887a3cc5b0f6eebe75fada"
+};
 // ══════════════════════════════════════════════════════════
 
 const app = initializeApp(firebaseConfig);
@@ -460,16 +461,16 @@ window.createRoom = async function(){
   if(!myName){ notify('Enter your name first!','red'); return; }
   isHost = true;
   roomId = Math.random().toString(36).slice(2,7).toUpperCase();
-  await set(ref(db,`rooms/${roomId}`), {
+  const roomData = {
     phase:'lobby', round:1, hostId: myId,
     settings:{ enabledCards:[...enabledCards], foolHint:true, voteTimer:true },
     players:{ [myId]:{ id:myId, name:myName, color:COLORS[0] } },
     assignments:{}, decoys:{}, completed:{}, votes:{}, scores:{}, ready:{},
-  });
-  // Auto-remove player when they disconnect
+  };
+  await set(ref(db,`rooms/${roomId}`), roomData);
+  gs = roomData; // set gs so showLobby has data before listener fires
   const presRef = ref(db, `rooms/${roomId}/players/${myId}`);
   onDisconnect(presRef).remove();
-
   listenRoom();
   showLobby();
 };
